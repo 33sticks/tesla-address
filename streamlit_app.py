@@ -74,7 +74,7 @@ def start_tesla_auth():
     
     auth_params = {
         'client_id': st.secrets["TESLA_CLIENT_ID"],
-        'redirect_uri': "https://tesla-address-bruasimwspiycwhw6ia6qk.streamlit.app/",
+        'redirect_uri': "https://tesla-address-bruasimwspiycwhw6ia6qk.streamlit.app/callback",
         'response_type': 'code',
         'scope': 'openid offline_access vehicle_device_data vehicle_cmds',
         'state': state
@@ -98,7 +98,7 @@ def handle_tesla_callback():
                     'client_id': st.secrets["TESLA_CLIENT_ID"],
                     'client_secret': st.secrets["TESLA_CLIENT_SECRET"],
                     'code': st.query_params['code'],
-                    'redirect_uri': "https://tesla-address-bruasimwspiycwhw6ia6qk.streamlit.app/"
+                    'redirect_uri': "https://tesla-address-bruasimwspiycwhw6ia6qk.streamlit.app/callback"
                 }
             )
             
