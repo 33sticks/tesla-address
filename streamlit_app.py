@@ -176,7 +176,7 @@ def main():
         if username:  # Only proceed if username is provided
             st.session_state.username = username
             save_tokens()  # Save immediately after setting username
-            st.experimental_rerun()
+            st.rerun()  # Updated from experimental_rerun()
         st.stop()  # Don't proceed until we have a username
     
     # Debug information
@@ -188,7 +188,7 @@ def main():
     if 'code' in st.query_params:
         if handle_tesla_callback(st.session_state.username):
             st.success("Successfully connected to Tesla account!")
-            st.rerun()
+            st.rerun()  # Updated from experimental_rerun()
 
     # Check if user has existing tokens
     if st.session_state.username in st.session_state.user_tokens and not st.session_state.authenticated:
@@ -216,7 +216,7 @@ def main():
             save_tokens()
         st.session_state.authenticated = False
         st.session_state.client = None
-        st.experimental_rerun()
+        st.rerun()  # Updated from experimental_rerun()
         return
 
     # Navigation interface
