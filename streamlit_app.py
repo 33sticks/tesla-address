@@ -72,8 +72,8 @@ def start_tesla_auth():
     state = secrets.token_urlsafe(16)
     st.session_state.auth_state = state
     
-    # Double encode the redirect URI to handle special characters properly
-    redirect_uri = quote_plus("https://33sticks-labs.com/auth/callback/")
+    # Single encode the redirect URI
+    redirect_uri = "https://33sticks-labs.com/auth/callback/"
     
     auth_params = {
         'client_id': st.secrets["TESLA_CLIENT_ID"],
@@ -83,9 +83,14 @@ def start_tesla_auth():
         'state': state
     }
     
-    # Construct auth URL with properly encoded parameters
-    auth_url = "https://auth.tesla.com/oauth2/v3/authorize?"
-    auth_url += "&".join(f"{k}={quote_plus(str(v))}" for k, v in auth_params.items())
+    # Construct auth URL, encoding each parameter individually
+    base_url = "https://auth.tesla.com/oauth2/v3/authorize"
+    params = []
+    for key, value in auth_params.items():
+        encoded_value = quote_plus(value)
+        params.append(f"{key}={encoded_value}")
+    
+    auth_url = f"{base_url}?{'&'.join(params)}"
     
     st.markdown(f'<a href="{auth_url}" target="_self">Click here to authenticate with Tesla</a>', unsafe_allow_html=True)
 
@@ -97,7 +102,7 @@ def handle_tesla_callback():
                 st.error("Invalid state parameter")
                 return False
                 
-            # Use properly encoded redirect URI in token request
+            # Use the exact same redirect URI as in the auth request
             redirect_uri = "https://33sticks-labs.com/auth/callback/"
             
             response = requests.post(
