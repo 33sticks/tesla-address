@@ -70,6 +70,7 @@ def save_tokens():
 def start_tesla_auth():
     """Start Tesla OAuth flow"""
     state = secrets.token_urlsafe(16)
+    st.write("Generated State:", state)  # Debug info
     st.session_state.auth_state = state
     
     redirect_uri = "https://33sticks-labs.com/auth/callback/"
@@ -79,8 +80,7 @@ def start_tesla_auth():
         'redirect_uri': redirect_uri,
         'response_type': 'code',
         'scope': 'openid offline_access vehicle_device_data vehicle_cmds',
-        'state': state,
-        'include_issuer': 'false'  # Prevent Tesla from adding issuer parameter
+        'state': state
     }
     
     # Construct auth URL, encoding each parameter individually
@@ -91,15 +91,23 @@ def start_tesla_auth():
         params.append(f"{key}={encoded_value}")
     
     auth_url = f"{base_url}?{'&'.join(params)}"
+    st.write("Auth URL:", auth_url)  # Debug info
     
     st.markdown(f'<a href="{auth_url}" target="_self">Click here to authenticate with Tesla</a>', unsafe_allow_html=True)
 
 def handle_tesla_callback():
     """Handle Tesla OAuth callback"""
     try:
-        if 'code' in st.query_params and 'state' in st.query_params:
-            if st.query_params['state'] != st.session_state.auth_state:
-                st.error("Invalid state parameter")
+        # Debug information
+        st.write("Query Parameters:", dict(st.query_params))
+        st.write("Stored State:", st.session_state.auth_state)
+        
+        code = st.query_params.get('code')
+        state = st.query_params.get('state')
+        
+        if code and state:
+            if state != st.session_state.auth_state:
+                st.error(f"Invalid state parameter. Got {state}, expected {st.session_state.auth_state}")
                 return False
                 
             # Use the exact same redirect URI as in the auth request
@@ -111,7 +119,7 @@ def handle_tesla_callback():
                     'grant_type': 'authorization_code',
                     'client_id': st.secrets["TESLA_CLIENT_ID"],
                     'client_secret': st.secrets["TESLA_CLIENT_SECRET"],
-                    'code': st.query_params['code'],
+                    'code': code,
                     'redirect_uri': redirect_uri
                 }
             )
@@ -141,6 +149,9 @@ def handle_tesla_callback():
             st.session_state.authenticated = True
             st.session_state.client = client
             return True
+        else:
+            st.error("Missing code or state in callback")
+            return False
             
     except Exception as e:
         st.error(f"Authentication failed: {str(e)}")
@@ -149,6 +160,9 @@ def handle_tesla_callback():
 def main():
     st.title("Tesla Navigation App")
     
+    # Debug information for session state
+    st.write("Full Session State:", {k: v for k, v in st.session_state.items() if k != 'client'})
+    
     # Simple user identification
     if 'username' not in st.session_state:
         st.session_state.username = st.text_input("Enter your name:", key="username_input")
@@ -156,8 +170,11 @@ def main():
             st.experimental_rerun()
         return
 
+    # Debug information for query parameters
+    st.write("Current Query Parameters:", dict(st.query_params))
+
     # Check for OAuth callback
-    if 'code' in st.query_params and not st.session_state.authenticated:
+    if 'code' in st.query_params:
         if handle_tesla_callback():
             st.success("Successfully connected to Tesla account!")
             st.rerun()
