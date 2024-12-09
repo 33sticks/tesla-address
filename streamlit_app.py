@@ -15,8 +15,6 @@ if 'client' not in st.session_state:
     st.session_state.client = None
 if 'user_tokens' not in st.session_state:
     st.session_state.user_tokens = {}
-if 'auth_state' not in st.session_state:
-    st.session_state.auth_state = None
 
 # File to store user tokens
 TOKENS_FILE = "user_tokens.pkl"
@@ -71,7 +69,12 @@ def start_tesla_auth():
     """Start Tesla OAuth flow"""
     state = secrets.token_urlsafe(16)
     st.write("Generated State:", state)  # Debug info
-    st.session_state.auth_state = state
+    
+    # Store state in user_tokens instead of session_state
+    if 'pending_auth' not in st.session_state.user_tokens:
+        st.session_state.user_tokens['pending_auth'] = {}
+    st.session_state.user_tokens['pending_auth'][st.session_state.username] = state
+    save_tokens()  # Persist to disk
     
     redirect_uri = "https://33sticks-labs.com/auth/callback/"
     
@@ -100,14 +103,17 @@ def handle_tesla_callback():
     try:
         # Debug information
         st.write("Query Parameters:", dict(st.query_params))
-        st.write("Stored State:", st.session_state.auth_state)
         
         code = st.query_params.get('code')
         state = st.query_params.get('state')
         
+        # Get stored state from user_tokens
+        expected_state = st.session_state.user_tokens.get('pending_auth', {}).get(st.session_state.username)
+        st.write("Expected State:", expected_state)
+        
         if code and state:
-            if state != st.session_state.auth_state:
-                st.error(f"Invalid state parameter. Got {state}, expected {st.session_state.auth_state}")
+            if state != expected_state:
+                st.error(f"Invalid state parameter. Got {state}, expected {expected_state}")
                 return False
                 
             # Use the exact same redirect URI as in the auth request
@@ -144,6 +150,11 @@ def handle_tesla_callback():
             }
             
             st.session_state.user_tokens[st.session_state.username] = user_data
+            
+            # Clean up the pending auth state
+            if 'pending_auth' in st.session_state.user_tokens and st.session_state.username in st.session_state.user_tokens['pending_auth']:
+                del st.session_state.user_tokens['pending_auth'][st.session_state.username]
+            
             save_tokens()
             
             st.session_state.authenticated = True
@@ -162,6 +173,7 @@ def main():
     
     # Debug information for session state
     st.write("Full Session State:", {k: v for k, v in st.session_state.items() if k != 'client'})
+    st.write("User Tokens State:", st.session_state.user_tokens)
     
     # Simple user identification
     if 'username' not in st.session_state:
@@ -204,7 +216,6 @@ def main():
             save_tokens()
         st.session_state.authenticated = False
         st.session_state.client = None
-        st.session_state.auth_state = None
         st.experimental_rerun()
         return
 
