@@ -52,28 +52,23 @@ def handle_navigation_request(username: str, destination: str):
     except Exception as e:
         return {"error": str(e)}
 
-# Check for API-like requests via query parameters
-query_params = st.query_params
-if 'api' in query_params and 'username' in query_params and 'destination' in query_params:
-    username = query_params['username']
-    destination = query_params['destination']
-    result = handle_navigation_request(username, destination)
-    st.json(result)
-    st.stop()
-
 def save_tokens():
     with open(TOKENS_FILE, 'wb') as f:
         pickle.dump(st.session_state.user_tokens, f)
 
-def start_tesla_auth():
+def start_tesla_auth(username: str):
     """Start Tesla OAuth flow"""
+    if not username:
+        st.error("Username is required before starting authentication")
+        return
+        
     state = secrets.token_urlsafe(16)
     st.write("Generated State:", state)  # Debug info
     
     # Store state in user_tokens instead of session_state
     if 'pending_auth' not in st.session_state.user_tokens:
         st.session_state.user_tokens['pending_auth'] = {}
-    st.session_state.user_tokens['pending_auth'][st.session_state.username] = state
+    st.session_state.user_tokens['pending_auth'][username] = state
     save_tokens()  # Persist to disk
     
     redirect_uri = "https://33sticks-labs.com/auth/callback/"
@@ -98,9 +93,13 @@ def start_tesla_auth():
     
     st.markdown(f'<a href="{auth_url}" target="_self">Click here to authenticate with Tesla</a>', unsafe_allow_html=True)
 
-def handle_tesla_callback():
+def handle_tesla_callback(username: str):
     """Handle Tesla OAuth callback"""
     try:
+        if not username:
+            st.error("Username is required for authentication")
+            return False
+            
         # Debug information
         st.write("Query Parameters:", dict(st.query_params))
         
@@ -108,7 +107,7 @@ def handle_tesla_callback():
         state = st.query_params.get('state')
         
         # Get stored state from user_tokens
-        expected_state = st.session_state.user_tokens.get('pending_auth', {}).get(st.session_state.username)
+        expected_state = st.session_state.user_tokens.get('pending_auth', {}).get(username)
         st.write("Expected State:", expected_state)
         
         if code and state:
@@ -149,11 +148,11 @@ def handle_tesla_callback():
                 'timestamp': datetime.now().isoformat()
             }
             
-            st.session_state.user_tokens[st.session_state.username] = user_data
+            st.session_state.user_tokens[username] = user_data
             
             # Clean up the pending auth state
-            if 'pending_auth' in st.session_state.user_tokens and st.session_state.username in st.session_state.user_tokens['pending_auth']:
-                del st.session_state.user_tokens['pending_auth'][st.session_state.username]
+            if 'pending_auth' in st.session_state.user_tokens and username in st.session_state.user_tokens['pending_auth']:
+                del st.session_state.user_tokens['pending_auth'][username]
             
             save_tokens()
             
@@ -171,41 +170,42 @@ def handle_tesla_callback():
 def main():
     st.title("Tesla Navigation App")
     
-    # Debug information for session state
+    # Simple user identification - MOVED TO TOP and required
+    if 'username' not in st.session_state or not st.session_state.username:
+        username = st.text_input("Enter your name:", key="username_input")
+        if username:  # Only proceed if username is provided
+            st.session_state.username = username
+            save_tokens()  # Save immediately after setting username
+            st.experimental_rerun()
+        st.stop()  # Don't proceed until we have a username
+    
+    # Debug information
     st.write("Full Session State:", {k: v for k, v in st.session_state.items() if k != 'client'})
     st.write("User Tokens State:", st.session_state.user_tokens)
-    
-    # Simple user identification
-    if 'username' not in st.session_state:
-        st.session_state.username = st.text_input("Enter your name:", key="username_input")
-        if st.session_state.username:
-            st.experimental_rerun()
-        return
-
-    # Debug information for query parameters
     st.write("Current Query Parameters:", dict(st.query_params))
 
     # Check for OAuth callback
     if 'code' in st.query_params:
-        if handle_tesla_callback():
+        if handle_tesla_callback(st.session_state.username):
             st.success("Successfully connected to Tesla account!")
             st.rerun()
 
     # Check if user has existing tokens
     if st.session_state.username in st.session_state.user_tokens and not st.session_state.authenticated:
         user_data = st.session_state.user_tokens[st.session_state.username]
-        client = TeslaAPIClient(
-            st.secrets["TESLA_CLIENT_ID"],
-            st.secrets["TESLA_CLIENT_SECRET"]
-        )
-        client.set_tokens(user_data['access_token'], user_data['refresh_token'])
-        client.vehicle_id = user_data['vehicle_id']
-        st.session_state.client = client
-        st.session_state.authenticated = True
+        if isinstance(user_data, dict) and 'access_token' in user_data:  # Verify it's a valid token entry
+            client = TeslaAPIClient(
+                st.secrets["TESLA_CLIENT_ID"],
+                st.secrets["TESLA_CLIENT_SECRET"]
+            )
+            client.set_tokens(user_data['access_token'], user_data['refresh_token'])
+            client.vehicle_id = user_data['vehicle_id']
+            st.session_state.client = client
+            st.session_state.authenticated = True
 
     if not st.session_state.authenticated:
         st.warning("Please connect your Tesla account to continue.")
-        start_tesla_auth()
+        start_tesla_auth(st.session_state.username)
         return
 
     # Show authenticated user
