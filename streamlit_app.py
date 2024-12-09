@@ -72,7 +72,6 @@ def start_tesla_auth():
     state = secrets.token_urlsafe(16)
     st.session_state.auth_state = state
     
-    # Single encode the redirect URI
     redirect_uri = "https://33sticks-labs.com/auth/callback/"
     
     auth_params = {
@@ -80,14 +79,15 @@ def start_tesla_auth():
         'redirect_uri': redirect_uri,
         'response_type': 'code',
         'scope': 'openid offline_access vehicle_device_data vehicle_cmds',
-        'state': state
+        'state': state,
+        'include_issuer': 'false'  # Prevent Tesla from adding issuer parameter
     }
     
     # Construct auth URL, encoding each parameter individually
     base_url = "https://auth.tesla.com/oauth2/v3/authorize"
     params = []
     for key, value in auth_params.items():
-        encoded_value = quote_plus(value)
+        encoded_value = quote_plus(str(value))
         params.append(f"{key}={encoded_value}")
     
     auth_url = f"{base_url}?{'&'.join(params)}"
